@@ -9,6 +9,9 @@ const configureSocialLogins = require('./socialLogins');
 const { connectDb, indexSync } = require('~/lib/db');
 const { logger } = require('~/config');
 
+const Sentry = require('@sentry/node');
+const SENTRY_DSN = process.env.SENTRY_DSN;
+
 const paths = require('~/config/paths');
 const routes = require('./routes');
 
@@ -41,6 +44,28 @@ const startServer = async () => {
     console.warn(
       'Social logins are disabled. Set Envrionment Variable "ALLOW_SOCIAL_LOGIN" to true to enable them.',
     );
+  }
+
+  // Sentry
+  if (SENTRY_DSN) {
+    Sentry.init({
+      dsn: SENTRY_DSN,
+      integrations: [
+        // enable HTTP calls tracing
+        new Sentry.Integrations.Http({ tracing: true }),
+        new Sentry.Integrations.Express({ app }),
+        new Sentry.Integrations.Mongo(),
+      ],
+      // We recommend adjusting this value in production, or using tracesSampler
+      // for finer control
+      tracesSampleRate: 1.0,
+    });
+
+    // The request handler must be the first middleware on the app
+    app.use(Sentry.Handlers.requestHandler());
+    // The error handler must be before any other error middleware and after all controllers
+    app.use(Sentry.Handlers.errorHandler());
+    app.use(Sentry.Handlers.tracingHandler());
   }
 
   // OAUTH

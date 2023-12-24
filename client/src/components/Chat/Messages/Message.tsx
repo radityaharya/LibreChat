@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-types */
 import { Plugin } from '~/components/Messages/Content';
 import MessageContent from './Content/MessageContent';
 import type { TMessageProps } from '~/common';
@@ -8,10 +9,18 @@ import MultiMessage from './MultiMessage';
 import HoverButtons from './HoverButtons';
 import SubRow from './SubRow';
 import { cn } from '~/utils';
+import React, { useEffect, useState } from 'react';
+import { BingSuggestionCard } from './BingSuggestions';
+import { Sandpack, createCodeSandboxFiles } from './Content/Sandpack';
+import { SandpackProvider } from '@codesandbox/sandpack-react';
+import { amethyst } from '@codesandbox/sandpack-themes';
 
 export default function Message(props: TMessageProps) {
+  const [files, setFiles] = useState({});
   const { message, siblingIdx, siblingCount, setSiblingIdx, currentEditId, setCurrentEditId } =
     props;
+
+  const [bingSuggestions, setBingSuggestions] = useState<string[]>([]);
 
   const {
     ask,
@@ -30,6 +39,24 @@ export default function Message(props: TMessageProps) {
 
   const { text, children, messageId = null, isCreatedByUser, error, unfinished } = message ?? {};
 
+  useEffect(() => {
+    if (!message || !message.text || !message.text.includes('```')) {
+      return;
+    }
+    console.log('generating files');
+    const newFiles = createCodeSandboxFiles(message.text);
+    setFiles({ ...newFiles });
+  }, [message]);
+
+  // bing suggestions
+  useEffect(() => {
+    if (!message || !message.suggestions) {
+      return;
+    }
+    setBingSuggestions(message.suggestions);
+    console.log(message.suggestions);
+  }, [message]);
+
   if (!message) {
     return null;
   }
@@ -42,24 +69,24 @@ export default function Message(props: TMessageProps) {
         onTouchMove={handleScroll}
       >
         <div className="m-auto justify-center p-4 py-2 text-base md:gap-6 ">
-          <div className="} group mx-auto flex flex-1 gap-3 text-base md:max-w-3xl md:px-5 lg:max-w-[40rem] lg:px-1 xl:max-w-[48rem] xl:px-5">
-            <div className="relative flex flex-shrink-0 flex-col items-end">
-              <div>
-                <div className="pt-0.5">
-                  <div className="gizmo-shadow-stroke flex h-6 w-6 items-center justify-center overflow-hidden rounded-full">
-                    {typeof icon === 'string' && /[^\\x00-\\x7F]+/.test(icon as string) ? (
-                      <span className=" direction-rtl w-40 overflow-x-scroll">{icon}</span>
-                    ) : (
-                      icon
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="} group mx-auto flex flex-1 flex-col gap-3 text-base md:max-w-3xl md:px-5 lg:max-w-[40rem] lg:px-1 xl:max-w-[48rem] xl:px-5">
             <div
               className={cn('relative flex w-full flex-col', isCreatedByUser ? '' : 'agent-turn')}
             >
-              <div className="select-none font-semibold">
+              <div className="my-4 flex select-none flex-row items-start gap-3 font-semibold">
+                <div className="relative flex flex-shrink-0 flex-col items-end">
+                  <div>
+                    <div className="pt-0.5">
+                      <div className="gizmo-shadow-stroke flex h-6 w-6 items-center justify-center overflow-hidden rounded-full">
+                        {typeof icon === 'string' && /[^\\x00-\\x7F]+/.test(icon as string) ? (
+                          <span className=" direction-rtl w-40 overflow-x-scroll">{icon}</span>
+                        ) : (
+                          icon
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 {isCreatedByUser ? 'You' : message.sender}
               </div>
               <div className="flex-col gap-1 md:gap-3">
@@ -87,24 +114,52 @@ export default function Message(props: TMessageProps) {
                   />
                 </div>
               </div>
+              {Object.keys(files).length > 0 && (
+                <SandpackProvider
+                  template="static"
+                  options={{
+                    autoReload: true,
+                    autorun: true,
+                    recompileMode: 'delayed',
+                    recompileDelay: 300,
+                  }}
+                  files={files}
+                  theme={amethyst}
+                >
+                  <Sandpack initFiles={files} />
+                </SandpackProvider>
+              )}
               {isLast && isSubmitting ? null : (
-                <SubRow classes="text-xs">
-                  <SiblingSwitch
-                    siblingIdx={siblingIdx}
-                    siblingCount={siblingCount}
-                    setSiblingIdx={setSiblingIdx}
-                  />
-                  <HoverButtons
-                    isEditing={edit}
-                    message={message}
-                    enterEdit={enterEdit}
-                    isSubmitting={isSubmitting}
-                    conversation={conversation ?? null}
-                    regenerate={() => regenerateMessage()}
-                    copyToClipboard={copyToClipboard}
-                    handleContinue={handleContinue}
-                    latestMessage={latestMessage}
-                  />
+                <SubRow classes="text-xs flex-col gap-2 pt-4">
+                  {bingSuggestions.length > 0 && (
+                    <div className="flex w-full flex-col gap-4 md:flex-row">
+                      {bingSuggestions.map((suggestion, index) => (
+                        <BingSuggestionCard
+                          key={index}
+                          suggestion={suggestion}
+                          onClick={() => ask({ text: suggestion })}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex flex-row items-start justify-start gap-2">
+                    <SiblingSwitch
+                      siblingIdx={siblingIdx}
+                      siblingCount={siblingCount}
+                      setSiblingIdx={setSiblingIdx}
+                    />
+                    <HoverButtons
+                      isEditing={edit}
+                      message={message}
+                      enterEdit={enterEdit}
+                      isSubmitting={isSubmitting}
+                      conversation={conversation ?? null}
+                      regenerate={() => regenerateMessage()}
+                      copyToClipboard={copyToClipboard}
+                      handleContinue={handleContinue}
+                      latestMessage={latestMessage}
+                    />
+                  </div>
                 </SubRow>
               )}
             </div>
